@@ -1,0 +1,66 @@
+services:
+  - name: qapi-trading
+    type: web
+    docker:
+      dockerfile: Dockerfile
+    env:
+      - key: PORT
+        value: "8000"
+      # --- Shared ---
+      - key: SUPABASE_URL
+        value: ""
+      - key: SUPABASE_KEY
+        value: ""
+      # --- ethbot ---
+      - key: PUSHOVER_TOKEN
+        value: ""
+      - key: PUSHOVER_USER
+        value: ""
+      - key: PUSHOVER_DEVICE
+        value: ""
+      - key: RSI_PERIOD
+        value: "14"
+      - key: TRACKER_INTERVAL
+        value: "4h"
+      - key: TRACKER_CHECK_MINUTES
+        value: "10"
+      # --- tradebot ---
+      - key: CHECK_INTERVAL_SECONDS
+        value: "600"
+      - key: EXCHANGE_BASE_URL
+        value: "https://api.binance.com"
+      - key: DEFAULT_SYMBOLS
+        value: '["BTCUSDT","ETHUSDT"]'
+      - key: DEFAULT_TIMEFRAMES
+        value: '["1h","4h","1d"]'
+      - key: KLINE_LIMIT
+        value: "300"
+      - key: OPENAI_API_KEY
+        value: ""
+      - key: OPENAI_MODEL
+        value: "gpt-4.1-mini"
+      - key: OPENAI_BASE_URL
+        value: ""
+      - key: PORTKEY_API_KEY
+        value: ""
+      - key: AI_CHART_TIMEFRAME
+        value: "4h"
+      - key: AI_CHART_CANDLE_LIMIT
+        value: "140"
+      - key: TELEGRAM_BOT_TOKEN
+        value: ""
+      - key: TELEGRAM_CHAT_ID
+        value: ""
+      - key: TELEGRAM_COOLDOWN_MINUTES
+        value: "60"
+      - key: TELEGRAM_SCORE_DELTA
+        value: "8"
+      - key: TELEGRAM_MIN_BUY_SCORE
+        value: "72"
+      - key: TELEGRAM_MIN_SELL_SCORE
+        value: "72"
+      - key: STATE_PATH
+        value: "/app/data/state.json"
+    ports:
+      - port: 8000
+        protocol: http

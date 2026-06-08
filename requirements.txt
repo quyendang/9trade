@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+httpx
+requests
+apscheduler
+jinja2
+python-multipart
+pandas
+numpy
+ta
+matplotlib
+mplfinance
+openai
+portkey-ai
+supabase

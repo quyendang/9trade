@@ -1,0 +1,10 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+.DS_Store
+_workspace/
+crypto-service-only/
+tradebot/
+data/state.json
+.env

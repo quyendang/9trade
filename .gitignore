@@ -1,0 +1,22 @@
+# Secrets — KHÔNG BAO GIỜ commit
+.env
+*.env.txt
+ethbot.env.txt
+tradebot.env.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Runtime state
+data/state.json
+
+# Source bot gốc (giữ local để rollback, không push)
+crypto-service-only/
+tradebot/
+
+# Harness review nội bộ
+_workspace/
+.claude/
