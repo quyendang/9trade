@@ -14,8 +14,9 @@ __pycache__/
 data/state.json
 
 # Source bot gốc (giữ local để rollback, không push)
-crypto-service-only/
-tradebot/
+# Anchored bằng "/" đầu để CHỈ match thư mục ở root, không nuốt app/tradebot/
+/crypto-service-only/
+/tradebot/
 
 # Harness review nội bộ
 _workspace/
