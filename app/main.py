@@ -7,6 +7,7 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler as EthbotScheduler
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from app.ethbot.routes import bots_router as ethbot_bots_router
 from app.ethbot.routes import router as ethbot_router
@@ -86,14 +87,7 @@ app.include_router(tradebot_health_router, prefix='/tradebot')
 
 @app.get('/')
 def index():
-    return {
-        'service': '9trade unified',
-        'bots': {
-            'ethbot': {'dashboard': '/ethbot/ETHUSDT', 'health': '/ethbot/health'},
-            'tradebot': {'dashboard': '/tradebot/', 'health': '/tradebot/health'},
-        },
-        'health': '/health',
-    }
+    return RedirectResponse(url='/tradebot/', status_code=307)
 
 
 @app.get('/health')
