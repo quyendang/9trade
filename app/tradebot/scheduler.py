@@ -103,6 +103,18 @@ class SignalService:
                 previous_states[key] = updated_state.pushover_zones[key]
                 continue
 
+            if not self._zone_rsi_confirmed(active_zone, indicators.rsi_14):
+                updated_state = self._state_store.update_pushover_zone_state(key, active_zone.zone_type, 'near')
+                previous_states[key] = updated_state.pushover_zones[key]
+                logger.info(
+                    'Pushover zone alert skipped for %s %s: %s zone active but RSI %.1f not confirmed',
+                    symbol,
+                    timeframe,
+                    active_zone.zone_type,
+                    indicators.rsi_14,
+                )
+                continue
+
             if not self._should_send_zone_alert(active_zone, previous):
                 updated_state = self._state_store.update_pushover_zone_state(key, active_zone.zone_type, active_zone.status)
                 previous_states[key] = updated_state.pushover_zones[key]
@@ -141,6 +153,11 @@ class SignalService:
 
         elapsed = (datetime.now(UTC) - previous.last_sent_at).total_seconds()
         return elapsed >= self._settings.pushover_zone_cooldown_minutes * 60
+
+    def _zone_rsi_confirmed(self, zone: ChartZone, rsi: float) -> bool:
+        if zone.zone_type == 'buy':
+            return rsi <= self._settings.pushover_buy_rsi_max
+        return rsi >= self._settings.pushover_sell_rsi_min
 
     @staticmethod
     def _pushover_zone_key(symbol: str, timeframe: str) -> str:

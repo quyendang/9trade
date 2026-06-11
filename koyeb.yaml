@@ -58,6 +58,10 @@ services:
         value: "cash"
       - key: PUSHOVER_ZONE_COOLDOWN_MINUTES
         value: "240"
+      - key: PUSHOVER_BUY_RSI_MAX
+        value: "40"
+      - key: PUSHOVER_SELL_RSI_MIN
+        value: "65"
       - key: STATE_PATH
         value: "/app/data/state.json"
     ports:

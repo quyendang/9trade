@@ -30,13 +30,18 @@ class PushoverNotifier:
         indicators: ChartIndicators,
     ) -> tuple[str, str]:
         side = 'BUY' if zone.zone_type == 'buy' else 'SELL'
+        rsi_rule = (
+            f'RSI <= {self._settings.pushover_buy_rsi_max:.1f}'
+            if zone.zone_type == 'buy'
+            else f'RSI >= {self._settings.pushover_sell_rsi_min:.1f}'
+        )
         title = f'Tradebot {side} zone | {symbol} {timeframe}'
         message = (
             f'{symbol} entered {side} zone on {timeframe}\n'
             f'Price: {price:.2f}\n'
             f'Zone: {zone.low:.2f} - {zone.high:.2f}\n'
             f'Status: {zone.status}\n'
-            f'RSI: {indicators.rsi_14:.1f}\n'
+            f'RSI: {indicators.rsi_14:.1f} ({rsi_rule})\n'
             f'MACD hist: {indicators.macd_histogram:.4f}\n'
             f'Support: {indicators.support:.2f}\n'
             f'Resistance: {indicators.resistance:.2f}'

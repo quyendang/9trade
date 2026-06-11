@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     pushover_device: str | None = None
     pushover_sound: str = 'cash'
     pushover_zone_cooldown_minutes: int = 240
+    pushover_buy_rsi_max: float = 40.0
+    pushover_sell_rsi_min: float = 65.0
 
     state_path: Path = Path('/app/data/state.json')
 
