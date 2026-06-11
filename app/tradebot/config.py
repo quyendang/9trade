@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     telegram_min_buy_score: int = 72
     telegram_min_sell_score: int = 72
 
+    pushover_enabled: bool = True
+    pushover_token: str | None = None
+    pushover_user: str | None = None
+    pushover_device: str | None = None
+    pushover_sound: str = 'cash'
+    pushover_zone_cooldown_minutes: int = 240
+
     state_path: Path = Path('/app/data/state.json')
 
     supabase_url: str | None = None

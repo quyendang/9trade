@@ -68,13 +68,31 @@ def _signals_to_js(signals: list[dict], symbols: list[str]) -> str:
 @router.get('/', response_class=HTMLResponse)
 async def dashboard(request: Request, settings: Settings = Depends(get_settings)) -> HTMLResponse:
     signals = _get_supabase_signals(settings)
-    symbols = ['BTCUSDT', 'ETHUSDT']
+    symbols = [symbol.upper() for symbol in settings.default_symbols]
     signals_json = _signals_to_js(signals, symbols)
     html = _render_html(symbols, signals_json)
     return HTMLResponse(content=html)
 
 
 def _render_html(symbols: list[str], signals_json: str) -> str:
+    current_tf_json = json.dumps({symbol: '4h' for symbol in symbols})
+    chart_cards = '\n'.join(
+        f"""
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">{symbol}</span>
+        <div class="tf-btns" id="tf-{symbol}">
+          <button class="tf-btn" data-sym="{symbol}" data-tf="1h">1H</button>
+          <button class="tf-btn active" data-sym="{symbol}" data-tf="4h">4H</button>
+          <button class="tf-btn" data-sym="{symbol}" data-tf="1d">1D</button>
+        </div>
+        <span class="chart-price" id="price-{symbol}">—</span>
+      </div>
+      <div class="chart-body" id="chart-{symbol}"><div class="loading">Đang tải...</div></div>
+      <div class="legend" id="legend-{symbol}"></div>
+    </div>"""
+        for symbol in symbols
+    )
     return f"""<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -173,38 +191,12 @@ def _render_html(symbols: list[str], signals_json: str) -> str:
 <body>
   <h1>Tradebot Dashboard</h1>
   <p class="subtitle">
-    <span style="color:#60a5fa">● tradebot</span> &nbsp;
-    <span style="color:#f59e0b">● ethbot</span>
-    &nbsp;·&nbsp; Mua <span style="color:#22c55e">●</span> &nbsp; Bán <span style="color:#ef4444">●</span>
+    Mua <span style="color:#22c55e">●</span> &nbsp; Bán <span style="color:#ef4444">●</span>
+    &nbsp;·&nbsp; Buy zone <span style="color:#16a34a">▰</span> &nbsp; Sell zone <span style="color:#dc2626">▰</span>
   </p>
 
   <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-header">
-        <span class="chart-title">BTCUSDT</span>
-        <div class="tf-btns" id="tf-BTCUSDT">
-          <button class="tf-btn" data-sym="BTCUSDT" data-tf="1h">1H</button>
-          <button class="tf-btn active" data-sym="BTCUSDT" data-tf="4h">4H</button>
-          <button class="tf-btn" data-sym="BTCUSDT" data-tf="1d">1D</button>
-        </div>
-        <span class="chart-price" id="price-BTCUSDT">—</span>
-      </div>
-      <div class="chart-body" id="chart-BTCUSDT"><div class="loading">Đang tải...</div></div>
-      <div class="legend" id="legend-BTCUSDT"></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-header">
-        <span class="chart-title">ETHUSDT</span>
-        <div class="tf-btns" id="tf-ETHUSDT">
-          <button class="tf-btn" data-sym="ETHUSDT" data-tf="1h">1H</button>
-          <button class="tf-btn active" data-sym="ETHUSDT" data-tf="4h">4H</button>
-          <button class="tf-btn" data-sym="ETHUSDT" data-tf="1d">1D</button>
-        </div>
-        <span class="chart-price" id="price-ETHUSDT">—</span>
-      </div>
-      <div class="chart-body" id="chart-ETHUSDT"><div class="loading">Đang tải...</div></div>
-      <div class="legend" id="legend-ETHUSDT"></div>
-    </div>
+{chart_cards}
   </div>
 
   <div class="signal-table-wrap">
@@ -214,7 +206,6 @@ def _render_html(symbols: list[str], signals_json: str) -> str:
         <tr>
           <th>Thời gian (UTC)</th>
           <th>Symbol</th>
-          <th>Bot</th>
           <th>Tín hiệu</th>
           <th>Độ tin cậy</th>
           <th>Mua / Bán</th>
@@ -230,7 +221,6 @@ def _render_html(symbols: list[str], signals_json: str) -> str:
 <script>
 const ALL_SIGNALS = {signals_json};
 const SYMBOLS = {json.dumps(symbols)};
-const BINANCE_BASE = 'https://api.binance.com';
 
 // action → màu chấm
 const ACTION_COLOR = {{
@@ -244,16 +234,12 @@ const ACTION_COLOR = {{
 const ACTION_LABEL = {{
   BUY_WATCH: 'Theo dõi Mua', SELL_WATCH: 'Theo dõi Bán',
   WAIT_CONFLICT: 'Chờ xác nhận', HOLD: 'Đứng quan sát',
-  BUY: 'Mua (ethbot)', SELL: 'Bán (ethbot)',
-}};
-const BOT_META = {{
-  tradebot: {{ color: '#60a5fa', label: 'tradebot' }},
-  ethbot:   {{ color: '#f59e0b', label: 'ethbot'   }},
+  BUY: 'Mua', SELL: 'Bán',
 }};
 const CONF_LABEL = {{ high: 'Cao', medium: 'Trung bình', low: 'Thấp' }};
 
 // Trạng thái timeframe hiện tại của mỗi symbol
-const currentTf = {{ BTCUSDT: '4h', ETHUSDT: '4h' }};
+const currentTf = {current_tf_json};
 // Lưu chart instance để destroy khi đổi TF
 const chartInstances = {{}};
 
@@ -270,17 +256,11 @@ function formatTime(ts) {{
   return `${{d.getUTCFullYear()}}-${{p(d.getUTCMonth()+1)}}-${{p(d.getUTCDate())}} ${{p(d.getUTCHours())}}:${{p(d.getUTCMinutes())}}`;
 }}
 
-async function fetchKlines(symbol, interval, limit) {{
-  const url = `${{BINANCE_BASE}}/api/v3/klines?symbol=${{symbol}}&interval=${{interval}}&limit=${{limit}}`;
+async function fetchChartData(symbol, interval, limit) {{
+  const url = `/tradebot/chart-data/${{symbol}}?timeframe=${{interval}}&limit=${{limit}}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Binance ${{res.status}}`);
-  return (await res.json()).map(k => ({{
-    time:  Math.floor(Number(k[0]) / 1000),
-    open:  parseFloat(k[1]),
-    high:  parseFloat(k[2]),
-    low:   parseFloat(k[3]),
-    close: parseFloat(k[4]),
-  }}));
+  if (!res.ok) throw new Error(`Chart data ${{res.status}}`);
+  return await res.json();
 }}
 
 // Snap signal timestamp đến nến gần nhất (tránh lệch múi giờ)
@@ -296,8 +276,54 @@ function snapToCandle(sigTs, candles, tfInterval) {{
   return best ? best.time : sigTs;
 }}
 
-function buildChart(symbol, candles, signals, tf) {{
+function drawZoneBands(container, chart, candleSeries, zones) {{
+  container._zoneBands = [];
+  zones.forEach(zone => {{
+    const band = document.createElement('div');
+    const color = zone.zone_type === 'buy' ? 'rgba(22, 163, 74, 0.16)' : 'rgba(220, 38, 38, 0.14)';
+    const border = zone.zone_type === 'buy' ? 'rgba(34, 197, 94, 0.45)' : 'rgba(248, 113, 113, 0.45)';
+    band.dataset.low = zone.low;
+    band.dataset.high = zone.high;
+    band.title = zone.note || '';
+    band.style.cssText = `
+      position:absolute; left:0; right:0; display:none; z-index:1;
+      background:${{color}}; border-top:1px solid ${{border}}; border-bottom:1px solid ${{border}};
+      pointer-events:none;
+    `;
+    container.appendChild(band);
+    container._zoneBands.push(band);
+  }});
+
+  chart.timeScale().subscribeVisibleTimeRangeChange(() => updateZoneBands(container, candleSeries));
+  requestAnimationFrame(() => updateZoneBands(container, candleSeries));
+}}
+
+function updateZoneBands(container, candleSeries) {{
+  if (!container._zoneBands) return;
+  container._zoneBands.forEach(band => {{
+    const low = Number(band.dataset.low);
+    const high = Number(band.dataset.high);
+    const yLow = candleSeries.priceToCoordinate(low);
+    const yHigh = candleSeries.priceToCoordinate(high);
+    if (yLow == null || yHigh == null) {{
+      band.style.display = 'none';
+      return;
+    }}
+    const top = Math.min(yLow, yHigh);
+    const height = Math.max(2, Math.abs(yLow - yHigh));
+    band.style.top = `${{top}}px`;
+    band.style.height = `${{height}}px`;
+    band.style.display = 'block';
+  }});
+}}
+
+function buildChart(symbol, chartData, signals, tf) {{
   const container = document.getElementById(`chart-${{symbol}}`);
+  const candles = chartData.candles || [];
+  if (candles.length === 0) {{
+    container.innerHTML = '<div class="loading">Không có dữ liệu nến</div>';
+    return;
+  }}
 
   // Destroy chart cũ nếu có
   if (chartInstances[symbol]) {{
@@ -324,6 +350,7 @@ function buildChart(symbol, candles, signals, tf) {{
     wickUpColor: '#22c55e', wickDownColor: '#ef4444',
   }});
   candleSeries.setData(candles);
+  drawZoneBands(container, chart, candleSeries, chartData.zones || []);
 
   // Giá hiện tại
   const last = candles[candles.length - 1];
@@ -340,7 +367,7 @@ function buildChart(symbol, candles, signals, tf) {{
       position: isBuy ? 'belowBar' : 'aboveBar',
       color:    color,
       shape:    'circle',
-      size:     sig.bot_source === 'ethbot' ? 1 : 1.4,
+      size:     1.4,
       text:     '',   // không text, chỉ chấm
     }};
   }});
@@ -351,19 +378,11 @@ function buildChart(symbol, candles, signals, tf) {{
     candleSeries.setMarkers(markers);
   }}
 
-  // Price lines support/resistance từ signal mới nhất mỗi bot
-  const tbSigs = signals.filter(s => s.bot_source === 'tradebot');
-  const ebSigs = signals.filter(s => s.bot_source === 'ethbot');
-
-  if (tbSigs.length > 0) {{
-    const l = tbSigs[tbSigs.length - 1];
-    if (l.support)    candleSeries.createPriceLine({{ price: l.support,    color: '#22c55e', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'S·T' }});
-    if (l.resistance) candleSeries.createPriceLine({{ price: l.resistance, color: '#f97316', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'R·T' }});
-  }}
-  if (ebSigs.length > 0) {{
-    const l = ebSigs[ebSigs.length - 1];
-    if (l.support)    candleSeries.createPriceLine({{ price: l.support,    color: '#34d399', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: true, title: 'S·E' }});
-    if (l.resistance) candleSeries.createPriceLine({{ price: l.resistance, color: '#fb923c', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: true, title: 'R·E' }});
+  // Price lines support/resistance từ backend chart context
+  const ind = chartData.latest_indicators || null;
+  if (ind) {{
+    if (ind.support)    candleSeries.createPriceLine({{ price: ind.support,    color: '#22c55e', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Support' }});
+    if (ind.resistance) candleSeries.createPriceLine({{ price: ind.resistance, color: '#f97316', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'Resistance' }});
   }}
 
   chart.timeScale().fitContent();
@@ -404,12 +423,10 @@ function buildChart(symbol, candles, signals, tf) {{
     const lines = sigsAtTime.map(sig => {{
       const color    = ACTION_COLOR[sig.action] || '#94a3b8';
       const label    = ACTION_LABEL[sig.action] || sig.action;
-      const botMeta  = BOT_META[sig.bot_source] || BOT_META['tradebot'];
       const score    = (sig.buy_score || sig.sell_score) ? ` · B${{sig.buy_score}}/S${{sig.sell_score}}` : '';
       const conf     = CONF_LABEL[sig.confidence] || sig.confidence || '';
       return `<div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #1e293b">
-        <span style="color:${{color}};font-weight:700">${{label}}</span>
-        <span style="color:${{botMeta.color}};font-size:0.7rem;margin-left:6px">[${{botMeta.label}}]</span><br>
+        <span style="color:${{color}};font-weight:700">${{label}}</span><br>
         <span style="color:#94a3b8">Giá:</span> <strong style="color:#f1f5f9">${{formatPrice(sig.price)}}</strong>${{score}}<br>
         <span style="color:#94a3b8">Hỗ trợ:</span> <span style="color:#22c55e">${{formatPrice(sig.support)}}</span>
         &nbsp;<span style="color:#94a3b8">Kháng cự:</span> <span style="color:#f97316">${{formatPrice(sig.resistance)}}</span><br>
@@ -437,6 +454,7 @@ function buildChart(symbol, candles, signals, tf) {{
 
   new ResizeObserver(() => {{
     chart.applyOptions({{ width: container.clientWidth, height: container.clientHeight }});
+    updateZoneBands(container, candleSeries);
   }}).observe(container);
 
   // Legend
@@ -444,14 +462,10 @@ function buildChart(symbol, candles, signals, tf) {{
   legend.innerHTML = [
     {{ color: '#22c55e', label: 'Nến tăng' }},
     {{ color: '#ef4444', label: 'Nến giảm' }},
-    {{ color: '#22c55e', label: 'Mua [T]' }},
-    {{ color: '#ef4444', label: 'Bán [T]' }},
-    {{ color: '#34d399', label: 'Mua [E]' }},
-    {{ color: '#f87171', label: 'Bán [E]' }},
-    {{ color: '#22c55e', label: 'Hỗ trợ [T]' }},
-    {{ color: '#f97316', label: 'Kháng cự [T]' }},
-    {{ color: '#34d399', label: 'Hỗ trợ [E]' }},
-    {{ color: '#fb923c', label: 'Kháng cự [E]' }},
+    {{ color: '#16a34a', label: 'Buy zone' }},
+    {{ color: '#dc2626', label: 'Sell zone' }},
+    {{ color: '#22c55e', label: 'Hỗ trợ' }},
+    {{ color: '#f97316', label: 'Kháng cự' }},
   ].map(item => `<div class="legend-item">
     <div class="legend-dot" style="background:${{item.color}}"></div>
     <span>${{item.label}}</span>
@@ -462,8 +476,8 @@ async function loadChart(symbol, tf) {{
   const container = document.getElementById(`chart-${{symbol}}`);
   container.innerHTML = '<div class="loading">Đang tải...</div>';
   try {{
-    const candles = await fetchKlines(symbol, tf, 300);
-    buildChart(symbol, candles, ALL_SIGNALS[symbol] || [], tf);
+    const chartData = await fetchChartData(symbol, tf, 300);
+    buildChart(symbol, chartData, ALL_SIGNALS[symbol] || [], tf);
   }} catch (err) {{
     container.innerHTML = `<div class="loading">Lỗi: ${{err.message}}</div>`;
   }}
@@ -491,19 +505,17 @@ function buildTable(allSignals) {{
   rows.sort((a, b) => b.time - a.time);
 
   if (rows.length === 0) {{
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#475569;padding:24px">Chưa có tín hiệu nào</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#475569;padding:24px">Chưa có tín hiệu nào</td></tr>';
     return;
   }}
 
   tbody.innerHTML = rows.map(r => {{
     const color   = ACTION_COLOR[r.action] || '#94a3b8';
     const label   = ACTION_LABEL[r.action] || r.action;
-    const botMeta = BOT_META[r.bot_source] || BOT_META['tradebot'];
     const score   = (r.buy_score || r.sell_score) ? `${{r.buy_score}} / ${{r.sell_score}}` : '—';
     return `<tr>
       <td style="white-space:nowrap">${{formatTime(r.time)}}</td>
       <td style="font-weight:600;color:#f1f5f9">${{r.symbol}}</td>
-      <td><span class="source-badge" style="background:${{botMeta.color}}22;color:${{botMeta.color}}">${{botMeta.label}}</span></td>
       <td><span class="badge" style="background:${{color}}22;color:${{color}}">${{label}}</span></td>
       <td>${{CONF_LABEL[r.confidence] || r.confidence || '—'}}</td>
       <td>${{score}}</td>

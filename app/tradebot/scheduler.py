@@ -10,8 +10,10 @@ from app.tradebot.engine.evaluator import SignalEvaluator
 from app.tradebot.market.charting import ChartRenderer
 from app.tradebot.market.exchange import ExchangeProvider
 from app.tradebot.market.indicators import add_indicators
-from app.tradebot.models.schema import SignalEnvelope, SignalState
+from app.tradebot.market.zones import build_hybrid_zones
+from app.tradebot.models.schema import ChartZone, PushoverZoneState, SignalEnvelope, SignalState
 from app.tradebot.notify.anti_spam import AntiSpamPolicy
+from app.tradebot.notify.pushover import PushoverNotifier
 from app.tradebot.notify.telegram import TelegramNotifier
 from app.tradebot.storage.state import StateStore
 from app.tradebot.storage.supabase_logger import SupabaseLogger
@@ -26,6 +28,7 @@ class SignalService:
         self._state_store = state_store
         self._anti_spam = AntiSpamPolicy(settings)
         self._notifier = TelegramNotifier(settings)
+        self._pushover = PushoverNotifier(settings)
         self._evaluator = SignalEvaluator()
         self._supabase = SupabaseLogger(settings.supabase_url, settings.supabase_key)
         self._ai_analyzer = OpenAIAnalyzer(
@@ -55,6 +58,9 @@ class SignalService:
                 )
                 timeframe_frames[timeframe] = add_indicators(frame)
 
+            if allow_notifications:
+                await self._send_zone_alerts(symbol, timeframe_frames, state.pushover_zones)
+
             signal = self._evaluator.evaluate(symbol, timeframe_frames)
             ai_analysis = await self._ai_analyzer.analyze(signal)
             signal = self._evaluator.apply_ai_analysis(signal, ai_analysis)
@@ -75,6 +81,70 @@ class SignalService:
         state.signals = signals
         self._state_store.save(state)
         return updated
+
+    async def _send_zone_alerts(
+        self,
+        symbol: str,
+        timeframe_frames: dict[str, object],
+        previous_states: dict[str, PushoverZoneState],
+    ) -> None:
+        for timeframe, frame in timeframe_frames.items():
+            try:
+                zones, indicators = build_hybrid_zones(frame)
+            except ValueError as exc:
+                logger.warning('Pushover zone check skipped for %s %s: %s', symbol, timeframe, exc)
+                continue
+
+            active_zone = next((zone for zone in zones if zone.status == 'active'), None)
+            key = self._pushover_zone_key(symbol, timeframe)
+            previous = previous_states.get(key)
+            if active_zone is None:
+                updated_state = self._state_store.update_pushover_zone_state(key, None, 'neutral')
+                previous_states[key] = updated_state.pushover_zones[key]
+                continue
+
+            if not self._should_send_zone_alert(active_zone, previous):
+                updated_state = self._state_store.update_pushover_zone_state(key, active_zone.zone_type, active_zone.status)
+                previous_states[key] = updated_state.pushover_zones[key]
+                continue
+
+            latest = frame.iloc[-1]
+            message = await self._pushover.send_zone_alert(
+                symbol=symbol,
+                timeframe=timeframe,
+                price=float(latest['close']),
+                zone=active_zone,
+                indicators=indicators,
+            )
+            if message is not None:
+                updated_state = self._state_store.update_pushover_zone_state(
+                    key,
+                    active_zone.zone_type,
+                    active_zone.status,
+                    message=message,
+                    sent=True,
+                )
+                previous_states[key] = updated_state.pushover_zones[key]
+            elif not self._pushover.is_enabled():
+                updated_state = self._state_store.update_pushover_zone_state(key, active_zone.zone_type, active_zone.status)
+                previous_states[key] = updated_state.pushover_zones[key]
+
+    def _should_send_zone_alert(self, zone: ChartZone, previous: PushoverZoneState | None) -> bool:
+        if previous is None or previous.last_zone_type is None:
+            return True
+        if previous.last_status != 'active':
+            return True
+        if previous.last_zone_type != zone.zone_type:
+            return True
+        if previous.last_sent_at is None:
+            return True
+
+        elapsed = (datetime.now(UTC) - previous.last_sent_at).total_seconds()
+        return elapsed >= self._settings.pushover_zone_cooldown_minutes * 60
+
+    @staticmethod
+    def _pushover_zone_key(symbol: str, timeframe: str) -> str:
+        return f'{symbol.upper()}:{timeframe}'
 
     def get_signals(self) -> SignalEnvelope:
         state = self._state_store.load()

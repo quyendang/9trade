@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.tradebot.models.schema import PersistedState, SignalState, TelegramState
+from app.tradebot.models.schema import PersistedState, PushoverZoneState, SignalState, TelegramState
 
 
 class StateStore:
@@ -35,4 +35,23 @@ class StateStore:
             last_message=message,
         )
         state.signals[symbol] = signal
+        return self.save(state)
+
+    def update_pushover_zone_state(
+        self,
+        key: str,
+        zone_type: str | None,
+        status: str | None,
+        message: str | None = None,
+        sent: bool = False,
+    ) -> PersistedState:
+        state = self.load()
+        previous = state.pushover_zones.get(key, PushoverZoneState())
+        state.pushover_zones[key] = PushoverZoneState(
+            last_zone_type=zone_type,
+            last_status=status,
+            last_sent_at=datetime.now(UTC) if sent else previous.last_sent_at,
+            last_seen_at=datetime.now(UTC),
+            last_message=message if sent else previous.last_message,
+        )
         return self.save(state)

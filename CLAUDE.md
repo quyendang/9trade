@@ -1,15 +1,14 @@
 # 9trade
 
-Service gộp đã triển khai theo Phương án A (Co-location) tại `app/`:
-- `app/main.py` — FastAPI bootstrap: `lifespan` khởi động cả 2 scheduler, mount router prefix `/ethbot` + `/tradebot`, `/` index + `/health` tổng hợp. Giữ `app_state` ở đây vì `app/tradebot/routes/signals.py` import `from app.main import app_state`.
-- `app/ethbot/` — ethbot tách từ `crypto-service-only/app/main.py`: `tracker.py` (indicator + decision + job), `routes.py` (2 dashboard handler dùng `def` đồng bộ để FastAPI dispatch threadpool, không chặn event loop), `scheduler.py` (apscheduler thread riêng), `supabase_logger.py`, `templates/`.
-- `app/tradebot/` — copy nguyên `tradebot/app/`, mọi import `app.X`→`app.tradebot.X`; `config.py` có `extra='ignore'` để bỏ qua env của ethbot.
-- 2 engine độc lập hoàn toàn: indicator math, decision rule, anti-spam, notify channel (Pushover vs Telegram), AI overlay, action enum đều KHÔNG dùng chung. Chỉ chung HTTP server + Supabase table `signals` (phân biệt bằng cột `bot_source`).
-- URL: `/ethbot/ETHUSDT` `/ethbot/BTCUSDT` `/ethbot/bots/*` `/ethbot/health`; `/tradebot/` `/tradebot/signals*` `/tradebot/run-once` `/tradebot/health`; `/` + `/health` ở root.
+Service hiện là một tradebot thống nhất tại `app/`:
+- `app/main.py` — FastAPI bootstrap: `lifespan` chỉ khởi động tradebot scheduler, mount router prefix `/tradebot`, `/` index + `/health` tổng hợp. Giữ `app_state` ở đây vì `app/tradebot/routes/signals.py` import `from app.main import app_state`.
+- `app/tradebot/` — tradebot modular, async (`httpx`) + asyncio scheduler, indicators qua lib `ta`, scoring đa timeframe (1h/4h/1d) + volume confirm + entry detection, OpenAI analyzer, notify Telegram + Pushover zone alerts + chart context, dashboard lightweight-charts.
+- Kỹ thuật dynamic buy/sell zone của ethbot đã được tích hợp vào tradebot dưới dạng chart-only hybrid zone theo từng timeframe; không còn scheduler/dashboard `/ethbot/*` trong runtime chính. Pushover được giữ lại như kênh cảnh báo khi giá đi vào buy/sell zone.
+- URL: `/tradebot/` `/tradebot/signals*` `/tradebot/chart-data/{symbol}` `/tradebot/run-once` `/tradebot/health`; `/` + `/health` ở root.
 - `crypto-service-only/` và `tradebot/` giữ lại làm reference/rollback. Verify: import OK + 8 endpoint smoke test trả 200 qua lifespan.
 
 Nguồn gốc 2 bot:
-- `crypto-service-only/` — **ethbot**: FastAPI monolithic, sync (requests) + apscheduler, indicators tự viết, dynamic-zone RSI/MACD trên 4h + BTC bull-filter, notify Pushover, dashboard Jinja2, ghi Supabase `bot_source='ethbot'`.
+- `crypto-service-only/` — **ethbot reference/rollback**: FastAPI monolithic, sync (requests) + apscheduler, indicators tự viết, dynamic-zone RSI/MACD trên 4h + BTC bull-filter, notify Pushover, dashboard Jinja2, ghi Supabase `bot_source='ethbot'`.
 - `tradebot/` — **tradebot**: FastAPI modular, async (httpx) + asyncio scheduler, indicators qua lib `ta`, scoring đa timeframe (1h/4h/1d) + volume confirm + entry detection, OpenAI analyzer, notify Telegram + chart ảnh, dashboard lightweight-charts, ghi Supabase `bot_source='tradebot'`.
 
 ## 하네스: Bot Merge Review

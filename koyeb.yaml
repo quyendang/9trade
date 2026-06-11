@@ -11,19 +11,6 @@ services:
         value: ""
       - key: SUPABASE_KEY
         value: ""
-      # --- ethbot ---
-      - key: PUSHOVER_TOKEN
-        value: ""
-      - key: PUSHOVER_USER
-        value: ""
-      - key: PUSHOVER_DEVICE
-        value: ""
-      - key: RSI_PERIOD
-        value: "14"
-      - key: TRACKER_INTERVAL
-        value: "4h"
-      - key: TRACKER_CHECK_MINUTES
-        value: "10"
       # --- tradebot ---
       - key: CHECK_INTERVAL_SECONDS
         value: "600"
@@ -59,6 +46,18 @@ services:
         value: "72"
       - key: TELEGRAM_MIN_SELL_SCORE
         value: "72"
+      - key: PUSHOVER_ENABLED
+        value: "true"
+      - key: PUSHOVER_TOKEN
+        value: ""
+      - key: PUSHOVER_USER
+        value: ""
+      - key: PUSHOVER_DEVICE
+        value: ""
+      - key: PUSHOVER_SOUND
+        value: "cash"
+      - key: PUSHOVER_ZONE_COOLDOWN_MINUTES
+        value: "240"
       - key: STATE_PATH
         value: "/app/data/state.json"
     ports:

@@ -44,6 +44,33 @@ class IndicatorTestResponse(BaseModel):
     symbols: dict[str, SymbolIndicatorResponse] = Field(default_factory=dict)
 
 
+class ChartCandle(BaseModel):
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+
+
+class ChartZone(BaseModel):
+    low: float
+    high: float
+    zone_type: Literal['buy', 'sell']
+    status: Literal['active', 'near', 'neutral']
+    note: str
+
+
+class ChartIndicators(BaseModel):
+    support: float
+    resistance: float
+    ema_50: float
+    bollinger_lower: float
+    bollinger_upper: float
+    atr_14: float
+    rsi_14: float
+    macd_histogram: float
+
+
 class OpenAIAnalysis(BaseModel):
     summary: str = 'AI analysis unavailable'
     risk_notes: list[str] = Field(default_factory=list)
@@ -88,10 +115,27 @@ class SignalState(BaseModel):
     sell_zone: PriceZone | None = None
 
 
+class ChartDataResponse(BaseModel):
+    symbol: str
+    timeframe: Literal['1h', '4h', '1d']
+    candles: list[ChartCandle] = Field(default_factory=list)
+    zones: list[ChartZone] = Field(default_factory=list)
+    latest_indicators: ChartIndicators
+    current_signal: SignalState | None = None
+
+
 class TelegramState(BaseModel):
     last_action: str | None = None
     last_score: int | None = None
     last_sent_at: datetime | None = None
+    last_message: str | None = None
+
+
+class PushoverZoneState(BaseModel):
+    last_zone_type: Literal['buy', 'sell'] | None = None
+    last_status: Literal['active', 'near', 'neutral'] | None = None
+    last_sent_at: datetime | None = None
+    last_seen_at: datetime | None = None
     last_message: str | None = None
 
 
@@ -103,6 +147,7 @@ class SignalEnvelope(BaseModel):
 class PersistedState(BaseModel):
     signals: dict[str, SignalState] = Field(default_factory=dict)
     telegram: dict[str, TelegramState] = Field(default_factory=dict)
+    pushover_zones: dict[str, PushoverZoneState] = Field(default_factory=dict)
     updated_at: datetime | None = None
 
 

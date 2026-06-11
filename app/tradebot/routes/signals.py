@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.tradebot.config import Settings, get_settings
 from app.tradebot.market.exchange import get_exchange_provider
 from app.tradebot.market.indicators import add_indicators, latest_snapshot
+from app.tradebot.market.zones import build_chart_candles, build_hybrid_zones
 from app.tradebot.models.schema import (
+    ChartDataResponse,
     IndicatorTestResponse,
     RunOnceResponse,
     SignalEnvelope,
@@ -62,3 +66,33 @@ def get_signal(symbol: str, service: SignalService = Depends(get_signal_service)
 async def run_once(service: SignalService = Depends(get_signal_service)) -> RunOnceResponse:
     updated = await service.run_once()
     return RunOnceResponse(status='ok', updated_symbols=updated, detail='Technical analysis cycle completed')
+
+
+@router.get('/chart-data/{symbol}', response_model=ChartDataResponse)
+async def chart_data(
+    symbol: str,
+    timeframe: Annotated[Literal['1h', '4h', '1d'], Query()] = '4h',
+    limit: Annotated[int, Query(ge=80, le=500)] = 300,
+    settings: Settings = Depends(get_settings),
+    service: SignalService = Depends(get_signal_service),
+) -> ChartDataResponse:
+    symbol = symbol.upper()
+    if symbol not in {configured.upper() for configured in settings.default_symbols}:
+        raise HTTPException(status_code=404, detail='Symbol not configured')
+
+    try:
+        exchange = get_exchange_provider(settings)
+        frame = await exchange.fetch_klines(symbol=symbol, interval=timeframe, limit=limit)
+        enriched = add_indicators(frame)
+        zones, indicators = build_hybrid_zones(enriched)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ChartDataResponse(
+        symbol=symbol,
+        timeframe=timeframe,
+        candles=build_chart_candles(enriched),
+        zones=zones,
+        latest_indicators=indicators,
+        current_signal=service.get_signal(symbol),
+    )
