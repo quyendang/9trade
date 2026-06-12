@@ -90,6 +90,7 @@ def _render_html(symbols: list[str], signals_json: str) -> str:
       </div>
       <div class="chart-body" id="chart-{symbol}"><div class="loading">Đang tải...</div></div>
       <div class="legend" id="legend-{symbol}"></div>
+      <div class="walls-panel" id="walls-{symbol}"></div>
     </div>"""
         for symbol in symbols
     )
@@ -164,6 +165,63 @@ def _render_html(symbols: list[str], signals_json: str) -> str:
       width: 9px; height: 9px;
       border-radius: 50%; flex-shrink: 0;
     }}
+    .walls-panel {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px 16px 14px;
+      border-top: 1px solid #334155;
+      background: #172033;
+    }}
+    @media (max-width: 560px) {{ .walls-panel {{ grid-template-columns: 1fr; }} }}
+    .walls-column {{
+      min-width: 0;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f172a;
+    }}
+    .walls-heading {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 9px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      border-bottom: 1px solid #1e293b;
+    }}
+    .walls-list {{
+      display: grid;
+      gap: 1px;
+    }}
+    .wall-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 9px;
+      font-size: 0.73rem;
+      color: #cbd5e1;
+      background: #111c2f;
+    }}
+    .wall-range {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #94a3b8;
+    }}
+    .wall-size {{
+      font-weight: 700;
+      color: #f8fafc;
+    }}
+    .walls-empty {{
+      padding: 8px 9px;
+      font-size: 0.72rem;
+      color: #64748b;
+    }}
     .signal-table-wrap {{ margin-top: 28px; }}
     .signal-table-wrap h2 {{ font-size: 1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 12px; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 0.8rem; }}
@@ -193,6 +251,7 @@ def _render_html(symbols: list[str], signals_json: str) -> str:
   <p class="subtitle">
     Mua <span style="color:#22c55e">●</span> &nbsp; Bán <span style="color:#ef4444">●</span>
     &nbsp;·&nbsp; Buy zone <span style="color:#16a34a">▰</span> &nbsp; Sell zone <span style="color:#dc2626">▰</span>
+    &nbsp;·&nbsp; Large order walls hiển thị trong card riêng
   </p>
 
   <div class="charts-grid">
@@ -325,20 +384,31 @@ function updateZoneBands(container, candleSeries) {{
   }});
 }}
 
-function drawOrderBookWalls(candleSeries, walls) {{
-  walls.forEach(wall => {{
-    const isBuy = wall.side === 'buy';
-    const color = isBuy ? '#14b8a6' : '#fb7185';
-    const label = isBuy ? 'Buy wall' : 'Sell wall';
-    candleSeries.createPriceLine({{
-      price: wall.price,
-      color,
-      lineWidth: 2,
-      lineStyle: LightweightCharts.LineStyle.SparseDotted,
-      axisLabelVisible: true,
-      title: `${{label}} ${{formatQuoteSize(wall.quote_size)}}`,
-    }});
-  }});
+function renderOrderBookWalls(symbol, walls) {{
+  const panel = document.getElementById(`walls-${{symbol}}`);
+  if (!panel) return;
+  const buyWalls = (walls || []).filter(w => w.side === 'buy').sort((a, b) => b.quote_size - a.quote_size);
+  const sellWalls = (walls || []).filter(w => w.side === 'sell').sort((a, b) => b.quote_size - a.quote_size);
+  panel.innerHTML = [
+    renderWallColumn('Buy walls', '#14b8a6', buyWalls),
+    renderWallColumn('Sell walls', '#fb7185', sellWalls),
+  ].join('');
+}}
+
+function renderWallColumn(title, color, walls) {{
+  const rows = walls.length
+    ? walls.map(wall => `<div class="wall-row">
+        <span class="wall-range">${{formatPrice(wall.low)}} - ${{formatPrice(wall.high)}}</span>
+        <span class="wall-size">${{formatQuoteSize(wall.quote_size)}}</span>
+      </div>`).join('')
+    : '<div class="walls-empty">Không có wall đủ lớn</div>';
+  return `<div class="walls-column">
+    <div class="walls-heading">
+      <span style="color:${{color}}">${{title}}</span>
+      <span>${{walls.length}}</span>
+    </div>
+    <div class="walls-list">${{rows}}</div>
+  </div>`;
 }}
 
 function buildChart(symbol, chartData, signals, tf) {{
@@ -375,7 +445,7 @@ function buildChart(symbol, chartData, signals, tf) {{
   }});
   candleSeries.setData(candles);
   drawZoneBands(container, chart, candleSeries, chartData.zones || []);
-  drawOrderBookWalls(candleSeries, chartData.order_book_walls || []);
+  renderOrderBookWalls(symbol, chartData.order_book_walls || []);
 
   // Giá hiện tại
   const last = candles[candles.length - 1];
@@ -489,8 +559,6 @@ function buildChart(symbol, chartData, signals, tf) {{
     {{ color: '#ef4444', label: 'Nến giảm' }},
     {{ color: '#16a34a', label: 'Buy zone' }},
     {{ color: '#dc2626', label: 'Sell zone' }},
-    {{ color: '#14b8a6', label: 'Buy wall' }},
-    {{ color: '#fb7185', label: 'Sell wall' }},
     {{ color: '#22c55e', label: 'Hỗ trợ' }},
     {{ color: '#f97316', label: 'Kháng cự' }},
   ].map(item => `<div class="legend-item">
