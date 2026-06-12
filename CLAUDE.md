@@ -2,7 +2,7 @@
 
 Service hiện là một tradebot thống nhất tại `app/`:
 - `app/main.py` — FastAPI bootstrap: `lifespan` chỉ khởi động tradebot scheduler, mount router prefix `/tradebot`, `/` index + `/health` tổng hợp. Giữ `app_state` ở đây vì `app/tradebot/routes/signals.py` import `from app.main import app_state`.
-- `app/tradebot/` — tradebot modular, async (`httpx`) + asyncio scheduler, indicators qua lib `ta`, scoring đa timeframe (1h/4h/1d) + volume confirm + entry detection, OpenAI analyzer, notify Telegram + Pushover zone alerts + chart context, dashboard lightweight-charts.
+- `app/tradebot/` — tradebot modular, async (`httpx`) + asyncio scheduler, indicators qua lib `ta`, scoring đa timeframe (1h/4h/1d) + volume confirm + entry detection, OpenAI analyzer, notify Telegram + Pushover zone alerts + chart context/order-book walls, dashboard lightweight-charts.
 - Kỹ thuật dynamic buy/sell zone của ethbot đã được tích hợp vào tradebot dưới dạng chart-only hybrid zone theo từng timeframe; không còn scheduler/dashboard `/ethbot/*` trong runtime chính. Pushover được giữ lại như kênh cảnh báo khi giá đi vào buy/sell zone và RSI đạt ngưỡng xác nhận.
 - URL: `/tradebot/` `/tradebot/signals*` `/tradebot/chart-data/{symbol}` `/tradebot/run-once` `/tradebot/health`; `/` + `/health` ở root.
 - `crypto-service-only/` và `tradebot/` giữ lại làm reference/rollback. Verify: import OK + 8 endpoint smoke test trả 200 qua lifespan.

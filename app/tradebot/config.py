@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     pushover_buy_rsi_max: float = 40.0
     pushover_sell_rsi_min: float = 65.0
 
+    order_book_walls_enabled: bool = True
+    order_book_depth_limit: int = Field(default=1000, ge=100, le=5000)
+    order_book_wall_bucket_pct: float = Field(default=0.001, gt=0)
+    order_book_wall_min_quote: float = Field(default=1_000_000, ge=0)
+    order_book_wall_max_levels: int = Field(default=8, ge=1, le=40)
+
     state_path: Path = Path('/app/data/state.json')
 
     supabase_url: str | None = None

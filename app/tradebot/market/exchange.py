@@ -13,6 +13,10 @@ class ExchangeProvider(ABC):
     async def fetch_klines(self, symbol: str, interval: str, limit: int) -> pd.DataFrame:
         raise NotImplementedError
 
+    @abstractmethod
+    async def fetch_order_book(self, symbol: str, limit: int) -> dict:
+        raise NotImplementedError
+
 
 class BinancePublicExchange(ExchangeProvider):
     def __init__(self, settings: Settings) -> None:
@@ -56,6 +60,20 @@ class BinancePublicExchange(ExchangeProvider):
         frame['close_time'] = pd.to_datetime(frame['close_time'], unit='ms', utc=True)
         frame = frame.dropna(subset=['open', 'high', 'low', 'close', 'volume']).reset_index(drop=True)
         return frame
+
+    async def fetch_order_book(self, symbol: str, limit: int) -> dict:
+        url = f'{self._settings.exchange_base_url}/api/v3/depth'
+        params = {'symbol': symbol, 'limit': limit}
+        timeout = httpx.Timeout(self._settings.request_timeout_seconds)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+
+        if not payload or 'bids' not in payload or 'asks' not in payload:
+            raise ValueError(f'No order book data returned for {symbol}')
+        return payload
 
 
 def get_exchange_provider(settings: Settings) -> ExchangeProvider:

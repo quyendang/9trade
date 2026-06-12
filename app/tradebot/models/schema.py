@@ -71,6 +71,16 @@ class ChartIndicators(BaseModel):
     macd_histogram: float
 
 
+class OrderBookWall(BaseModel):
+    side: Literal['buy', 'sell']
+    price: float
+    low: float
+    high: float
+    quantity: float
+    quote_size: float
+    level_count: int
+
+
 class OpenAIAnalysis(BaseModel):
     summary: str = 'AI analysis unavailable'
     risk_notes: list[str] = Field(default_factory=list)
@@ -120,6 +130,7 @@ class ChartDataResponse(BaseModel):
     timeframe: Literal['1h', '4h', '1d']
     candles: list[ChartCandle] = Field(default_factory=list)
     zones: list[ChartZone] = Field(default_factory=list)
+    order_book_walls: list[OrderBookWall] = Field(default_factory=list)
     latest_indicators: ChartIndicators
     current_signal: SignalState | None = None
 

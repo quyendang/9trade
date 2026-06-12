@@ -250,6 +250,14 @@ function formatPrice(p) {{
     : p.toFixed(4);
 }}
 
+function formatQuoteSize(value) {{
+  if (!value) return '$0';
+  if (value >= 1_000_000_000) return `$${{(value / 1_000_000_000).toFixed(2)}}B`;
+  if (value >= 1_000_000) return `$${{(value / 1_000_000).toFixed(2)}}M`;
+  if (value >= 1_000) return `$${{(value / 1_000).toFixed(1)}}K`;
+  return `$${{value.toFixed(0)}}`;
+}}
+
 function formatTime(ts) {{
   const d = new Date(ts * 1000);
   const p = n => String(n).padStart(2, '0');
@@ -317,6 +325,22 @@ function updateZoneBands(container, candleSeries) {{
   }});
 }}
 
+function drawOrderBookWalls(candleSeries, walls) {{
+  walls.forEach(wall => {{
+    const isBuy = wall.side === 'buy';
+    const color = isBuy ? '#14b8a6' : '#fb7185';
+    const label = isBuy ? 'Buy wall' : 'Sell wall';
+    candleSeries.createPriceLine({{
+      price: wall.price,
+      color,
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+      axisLabelVisible: true,
+      title: `${{label}} ${{formatQuoteSize(wall.quote_size)}}`,
+    }});
+  }});
+}}
+
 function buildChart(symbol, chartData, signals, tf) {{
   const container = document.getElementById(`chart-${{symbol}}`);
   const candles = chartData.candles || [];
@@ -351,6 +375,7 @@ function buildChart(symbol, chartData, signals, tf) {{
   }});
   candleSeries.setData(candles);
   drawZoneBands(container, chart, candleSeries, chartData.zones || []);
+  drawOrderBookWalls(candleSeries, chartData.order_book_walls || []);
 
   // Giá hiện tại
   const last = candles[candles.length - 1];
@@ -464,6 +489,8 @@ function buildChart(symbol, chartData, signals, tf) {{
     {{ color: '#ef4444', label: 'Nến giảm' }},
     {{ color: '#16a34a', label: 'Buy zone' }},
     {{ color: '#dc2626', label: 'Sell zone' }},
+    {{ color: '#14b8a6', label: 'Buy wall' }},
+    {{ color: '#fb7185', label: 'Sell wall' }},
     {{ color: '#22c55e', label: 'Hỗ trợ' }},
     {{ color: '#f97316', label: 'Kháng cự' }},
   ].map(item => `<div class="legend-item">

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.tradebot.config import Settings, get_settings
 from app.tradebot.market.exchange import get_exchange_provider
 from app.tradebot.market.indicators import add_indicators, latest_snapshot
+from app.tradebot.market.order_book import build_order_book_walls
 from app.tradebot.market.zones import build_chart_candles, build_hybrid_zones
 from app.tradebot.models.schema import (
     ChartDataResponse,
@@ -19,6 +21,7 @@ from app.tradebot.models.schema import (
 from app.tradebot.scheduler import SignalService
 from app.tradebot.storage.state import StateStore
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=['signals'])
 
 
@@ -87,12 +90,27 @@ async def chart_data(
         zones, indicators = build_hybrid_zones(enriched)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    walls = []
+    if settings.order_book_walls_enabled:
+        try:
+            order_book = await exchange.fetch_order_book(symbol=symbol, limit=settings.order_book_depth_limit)
+            current_price = float(enriched.iloc[-1]['close'])
+            walls = build_order_book_walls(
+                order_book=order_book,
+                current_price=current_price,
+                bucket_pct=settings.order_book_wall_bucket_pct,
+                min_quote=settings.order_book_wall_min_quote,
+                max_levels=settings.order_book_wall_max_levels,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Order book walls unavailable for %s: %s', symbol, exc)
 
     return ChartDataResponse(
         symbol=symbol,
         timeframe=timeframe,
         candles=build_chart_candles(enriched),
         zones=zones,
+        order_book_walls=walls,
         latest_indicators=indicators,
         current_signal=service.get_signal(symbol),
     )
